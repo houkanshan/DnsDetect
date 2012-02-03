@@ -1,0 +1,53 @@
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/!svn/ver/2/trunk/com/seedclass/network/DnsDetect
+END
+test.java
+K 25
+svn:wc:ra_dav:version-url
+V 63
+/svn/!svn/ver/2/trunk/com/seedclass/network/DnsDetect/test.java
+END
+Global.java
+K 25
+svn:wc:ra_dav:version-url
+V 66
+/svn/!svn/ver/14/trunk/com/seedclass/network/DnsDetect/Global.java
+END
+DnsAnalyse.java
+K 25
+svn:wc:ra_dav:version-url
+V 70
+/svn/!svn/ver/15/trunk/com/seedclass/network/DnsDetect/DnsAnalyse.java
+END
+gui.java
+K 25
+svn:wc:ra_dav:version-url
+V 63
+/svn/!svn/ver/15/trunk/com/seedclass/network/DnsDetect/gui.java
+END
+MutiTaskGUI.java
+K 25
+svn:wc:ra_dav:version-url
+V 71
+/svn/!svn/ver/10/trunk/com/seedclass/network/DnsDetect/MutiTaskGUI.java
+END
+DnsScan.java
+K 25
+svn:wc:ra_dav:version-url
+V 67
+/svn/!svn/ver/15/trunk/com/seedclass/network/DnsDetect/DnsScan.java
+END
+Test_ui.java
+K 25
+svn:wc:ra_dav:version-url
+V 67
+/svn/!svn/ver/15/trunk/com/seedclass/network/DnsDetect/Test_ui.java
+END
+FileProcess.java
+K 25
+svn:wc:ra_dav:version-url
+V 71
+/svn/!svn/ver/15/trunk/com/seedclass/network/DnsDetect/FileProcess.java
+END

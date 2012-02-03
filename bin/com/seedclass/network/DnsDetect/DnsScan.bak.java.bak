@@ -1,0 +1,313 @@
+package com.seedclass.network.DnsDetect;
+
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.Reader;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Properties;
+import java.util.jar.JarException;
+
+import javax.management.loading.PrivateClassLoader;
+
+import org.xbill.DNS.ARecord;
+import org.xbill.DNS.Lookup;
+import org.xbill.DNS.Record;
+import org.xbill.DNS.SimpleResolver;
+import org.xbill.DNS.TextParseException;
+import org.xbill.DNS.Type;
+
+import com.csvreader.CsvReader;
+import com.csvreader.CsvWriter;
+
+//TODO 增加代理方式dns请求
+//TODO 增加结果分析工具
+//TODO 多线程处理DNS请求, 没解决竞争问题, 放弃
+
+public class DnsScan extends Thread{
+	public static void main(String[] args) {
+		DnsScan t = new DnsScan();
+		t.start();
+	}
+	
+	public void run() {
+		final String Top1000NameFile = "E:\\studio\\programing\\code\\Java\\workspace\\network\\data\\top-1m.csv";
+		DnsRequest dnsRequest = null;
+		// 所有Top1000个域名的读入
+		CsvReader allReader = null;
+		// 写入所有信息
+		CsvWriter allWriter = null;
+		// 写入dns解析错误信息
+		CsvWriter errWriter = null;
+		// dns请求结果
+		ArrayList<String> addrList = null;
+
+		// 设置SOCKS代理服务器地址
+		String SocksProxyAddr = "127.0.0.1";
+		String SocksProxyPort = "8087";
+		Properties prop = System.getProperties();
+		prop.setProperty("socksProxyHost", SocksProxyAddr);
+		prop.setProperty("socksProxyPort", SocksProxyPort);
+
+		// 发起dns请求
+		try {
+			allReader = new CsvReader(Top1000NameFile);
+			allWriter = new CsvWriter("DnsAllResult.csv");
+			errWriter = new CsvWriter("DnsErrResult.csv");
+
+
+			// 获取一个域名, 并发起dns请求
+			while (false != allReader.readRecord()) {
+				dnsRequest = new DnsRequest("8.8.8.8");
+				dnsRequest.setTCP();
+				// 获取待解析域名并写入
+				String nowName = allReader.get(1);
+				System.out.println(nowName);
+
+				// 发起dns请求, 并写入错误码和结果
+				// dnsRequest.doRequest(nowName);
+				// addrList = dnsRequest.getAddrList();
+				dnsRequest.setQueryName(nowName);
+				dnsRequest.start();
+
+				// 写入到所有结果的文件中
+				allWriter.write(nowName);
+				allWriter.write(String.valueOf(dnsRequest.getErrCode()));
+				allWriter.write(dnsRequest.getErrString());
+				if (addrList != null) {
+					for (String tmpName : addrList) {
+						System.out.print(tmpName + ",");
+						allWriter.write(tmpName);
+					}
+					System.out.println();
+				} else {
+					// 解析失败, 写入到错误结果的文件中
+					errWriter.write(nowName);
+					errWriter.write(String.valueOf(dnsRequest.getErrCode()));
+					errWriter.write(dnsRequest.getErrString());
+					errWriter.endRecord();
+					System.out.println(dnsRequest.getErrString());
+				}
+				allWriter.endRecord();
+			}
+		} catch (TextParseException e) {
+			e.printStackTrace();
+			System.out.println("请求的域名不合法");
+		} catch (java.net.UnknownHostException e) {
+			// 指定错误的DNS服务器也直接退出
+			e.printStackTrace();
+			System.out.println("指定DNS服务器找不到");
+			return;
+		} catch (FileNotFoundException e) {
+			// 如果是文件读取错误就直接退出.
+			e.printStackTrace();
+			System.out.println("文件无法打开");
+			return;
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.out.println("文件写入错误");
+		}
+
+//		try {
+//			Thread.sleep(10000);
+//		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//			System.out.println("wtf");
+//		}
+		allReader.close();
+		allWriter.close();
+		errWriter.close();
+		System.out.println("finish");
+		return;
+	}
+}
+
+/** CVS操作 */
+class CsvProcess {
+	private CsvReader allReader = null;
+	private CsvWriter allWriter = null;
+	private CsvWriter errWriter = null;
+	private String allReaderFileName = "E:\\studio\\programing\\code\\Java\\workspace\\network\\data\\top-1m.csv";
+	private String allWriteFileName = "DnsAllResult.csv";
+	private String errWriteFileName = "DnsErrResult.csv";
+
+	private String curName = null;
+
+	public CsvProcess(String allReaderFileName, String allWriteFileName,
+			String errWriteFileName) throws FileNotFoundException {
+		allReader = new CsvReader(allReaderFileName);
+		allWriter = new CsvWriter(allWriteFileName);
+		errWriter = new CsvWriter(errWriteFileName);
+
+	}
+
+	public boolean hasNextRecord() throws IOException {
+		return allReader.readRecord();
+	}
+
+	/** 获取当待请求的域名 */
+	public String getName() throws IOException {
+		curName = allReader.get(1);
+		return curName;
+	}
+
+	/**
+	 * 写入一行数据
+	 * 
+	 * @param name
+	 *            , 域名
+	 * @param errCode
+	 *            , 错误码
+	 * @param errString
+	 *            , 错误信息
+	 * @param addrList
+	 *            , 地址列表
+	 * @throws UnknownHostException
+	 * @throws TextParseException
+	 * @throws IOException
+	 * */
+	public void writeLine(String name, int errCode, String errString,
+			ArrayList<String> addrList) throws UnknownHostException,
+			TextParseException, IOException {
+		allWriter.write(name);
+		allWriter.write(String.valueOf(errCode));
+		allWriter.write(errString);
+
+		if (addrList != null) {
+			for (String tmpName : addrList) {
+				System.out.print(tmpName + ",");
+				allWriter.write(tmpName);
+			}
+			System.out.println();
+		} else {
+			// 解析失败, 写入到错误结果的文件中
+			errWriter.write(name);
+			errWriter.write(String.valueOf(errCode));
+			errWriter.write(errString);
+			errWriter.endRecord();
+			System.out.println(errString);
+		}
+		allWriter.endRecord();
+	}
+
+	/** 关闭所有读写对象, 完成数据写入 */
+	public void closeAllFile() {
+		allReader.close();
+		allWriter.close();
+		errWriter.close();
+	}
+}
+
+/** 用于处理dns请求 */
+class DnsRequest extends Thread {
+	private String DnsServer = null;
+	private String name = null;
+	private int errCode = Lookup.SUCCESSFUL;
+	private String errString = null;
+	private ArrayList<String> addressList = null;
+	private SimpleResolver resolver = null;
+
+	public DnsRequest() {
+	}
+
+	/**
+	 * 用于初始化dns服务器的构造
+	 * 
+	 * @throws UnknownHostException
+	 */
+	public DnsRequest(String DnsServerName) throws UnknownHostException {
+		this.setDnsServer(DnsServerName);
+	}
+
+	public void setTCP() {
+		resolver.setTCP(true);
+	}
+
+	public void setUDP() {
+		resolver.setTCP(false);
+	}
+
+	/**
+	 * 配置一个dnsServer
+	 * 
+	 * @throws UnknownHostException
+	 */
+	public void setDnsServer(String DnsServerName) throws UnknownHostException {
+		this.DnsServer = DnsServerName;
+		setResolver();
+	}
+
+	/**
+	 * 改变解析器的配置
+	 * 
+	 * @throws UnknownHostException
+	 */
+	private void setResolver() throws UnknownHostException {
+		resolver = new SimpleResolver(this.DnsServer);
+	}
+
+	/** 加入代理或者隧道的配置 */
+
+	public void setQueryName(String name) {
+		this.name = name;
+	}
+
+	/**
+	 * 发起一个dns请求, 并获取结果 线程程序
+	 */
+	public void run() {
+		Lookup lookup;
+		
+		if (this.name == null) {
+			errCode = -1;
+			errString = "name is not set";
+			return;
+		}
+		try {
+			lookup = new Lookup(this.name, Type.A);
+
+			if (resolver != null) {
+				lookup.setResolver(resolver);
+			}
+			Record[] records = lookup.run();
+			addressList = null;
+
+			errCode = lookup.getResult();
+			errString = lookup.getErrorString();
+			if (errCode == Lookup.SUCCESSFUL) {
+				addressList = new ArrayList<String>();
+				String address = null;
+				for (int i = 0; i < records.length; i++) {
+					if (records[i] instanceof ARecord) {
+						address = ((ARecord) records[i]).getAddress()
+								.getHostAddress();
+						addressList.add(address);
+					}
+				}
+			}
+		} catch (TextParseException e) {
+			e.printStackTrace();
+			errCode = -1;
+			errString = "query name is invalid";
+		} finally {
+			System.out.println(errString);
+		}
+		System.out.println(errString);
+	}
+
+	/** 获取错误码(int型需要转string) */
+	public int getErrCode() {
+		return this.errCode;
+	}
+
+	/** 获取错误信息 */
+	public String getErrString() {
+		return this.errString;
+	}
+
+	/** 获取解析结果 */
+	public ArrayList<String> getAddrList() {
+		return addressList;
+	}
+}

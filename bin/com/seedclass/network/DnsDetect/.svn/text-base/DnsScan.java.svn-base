@@ -1,0 +1,463 @@
+package com.seedclass.network.DnsDetect;
+
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.Reader;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Properties;
+import java.util.jar.JarException;
+
+import javax.management.loading.PrivateClassLoader;
+
+import org.eclipse.swt.SWT;
+import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.Table;
+import org.eclipse.swt.widgets.TableItem;
+import org.xbill.DNS.ARecord;
+import org.xbill.DNS.Cache;
+import org.xbill.DNS.Lookup;
+import org.xbill.DNS.Record;
+import org.xbill.DNS.SimpleResolver;
+import org.xbill.DNS.TextParseException;
+import org.xbill.DNS.Type;
+
+import com.csvreader.CsvReader;
+import com.csvreader.CsvWriter;
+
+//TODO 增加代理方式dns请求
+//TODO 增加结果分析工具
+//TODO 多线程处理DNS请求, 没解决竞争问题, 放弃
+
+public class DnsScan extends Thread {
+	static final int waitTime = 100;
+
+	public static void main(String[] args) {
+
+		/** @test begin */
+		DnsRequest tmpRequest;
+		try {
+			tmpRequest = new DnsRequest("8.8.8.8");
+			tmpRequest.setQueryName("www.baidu.com");
+			Global.dnsRecords.add(tmpRequest);
+		} catch (UnknownHostException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		/** @test end */
+
+		DnsScan t = new DnsScan();
+		t.start();
+	}
+
+	/** 按下按钮, 启动dns分析进程 */
+	public void run() {
+		ArrayList<String> addrList = null;
+
+		// 设置SOCKS代理服务器地址
+		// String SocksProxyAddr = "127.0.0.1";
+		// String SocksProxyPort = "8087";
+		// Properties prop = System.getProperties();
+		// prop.setProperty("socksProxyHost", SocksProxyAddr);
+		// prop.setProperty("socksProxyPort", SocksProxyPort);
+
+		for (DnsRequest tmpRequest : Global.dnsRecords) {
+			// 如果gui被关闭, 则终止线程
+			if (Global.rawNameTable.isDisposed()) {
+				return;
+			}
+			// 如果子线程出关键错误, 则终止所有线程
+			if (DnsRequest.isErr) {
+				return;
+			}
+			tmpRequest.start();
+			try {
+				Thread.sleep(waitTime);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+				System.out.println("我不知道这是什么错误");
+			}
+		}
+
+		/*
+		 * // 发起dns请求 try {
+		 * 
+		 * 
+		 * // 获取一个域名, 并发起dns请求 while (false != allReader.readRecord()) {
+		 * dnsRequest = new DnsRequest("8.8.8.8"); dnsRequest.setTCP(); //
+		 * 获取待解析域名并写入 String nowName = allReader.get(1);
+		 * System.out.println(nowName);
+		 * 
+		 * // 发起dns请求, 并写入错误码和结果 // dnsRequest.doRequest(nowName); // addrList =
+		 * dnsRequest.getAddrList(); dnsRequest.setQueryName(nowName);
+		 * dnsRequest.start();
+		 * 
+		 * // 写入到所有结果的文件中 allWriter.write(nowName);
+		 * allWriter.write(String.valueOf(dnsRequest.getErrCode()));
+		 * allWriter.write(dnsRequest.getErrString()); if (addrList != null) {
+		 * for (String tmpName : addrList) { System.out.print(tmpName + ",");
+		 * allWriter.write(tmpName); } System.out.println(); } else { // 解析失败,
+		 * 写入到错误结果的文件中 errWriter.write(nowName);
+		 * errWriter.write(String.valueOf(dnsRequest.getErrCode()));
+		 * errWriter.write(dnsRequest.getErrString()); errWriter.endRecord();
+		 * System.out.println(dnsRequest.getErrString()); }
+		 * allWriter.endRecord(); } } catch (TextParseException e) {
+		 * e.printStackTrace(); System.out.println("请求的域名不合法"); } catch
+		 * (java.net.UnknownHostException e) { // 指定错误的DNS服务器也直接退出
+		 * e.printStackTrace(); System.out.println("指定DNS服务器找不到"); return; }
+		 * catch (FileNotFoundException e) { // 如果是文件读取错误就直接退出.
+		 * e.printStackTrace(); System.out.println("文件无法打开"); return; } catch
+		 * (IOException e) { e.printStackTrace(); System.out.println("文件写入错误");
+		 * }
+		 * 
+		 * // try { // Thread.sleep(10000); // } catch (InterruptedException e)
+		 * { // TODO Auto-generated catch block // e.printStackTrace(); //
+		 * System.out.println("wtf"); // } allReader.close(); allWriter.close();
+		 * errWriter.close(); System.out.println("finish"); return;
+		 */
+	}
+}
+
+/** CVS操作 */
+class CsvProcess {
+	private CsvReader allReader = null;
+	private CsvWriter allWriter = null;
+	private CsvWriter errWriter = null;
+	private String allReaderFileName = "E:\\studio\\programing\\code\\Java\\workspace\\network\\data\\top-1m.csv";
+	private String allWriteFileName = "DnsAllResult.csv";
+	private String errWriteFileName = "DnsErrResult.csv";
+
+	private String curName = null;
+
+	public CsvProcess(String allReaderFileName, String allWriteFileName,
+			String errWriteFileName) throws FileNotFoundException {
+		allReader = new CsvReader(allReaderFileName);
+		allWriter = new CsvWriter(allWriteFileName);
+		errWriter = new CsvWriter(errWriteFileName);
+
+	}
+
+	public boolean hasNextRecord() throws IOException {
+		return allReader.readRecord();
+	}
+
+	/** 获取当待请求的域名 */
+	public String getQueryName() throws IOException {
+		curName = allReader.get(1);
+		return curName;
+	}
+
+	/**
+	 * 写入一行数据
+	 * 
+	 * @param name
+	 *            , 域名
+	 * @param errCode
+	 *            , 错误码
+	 * @param errString
+	 *            , 错误信息
+	 * @param addrList
+	 *            , 地址列表
+	 * @throws UnknownHostException
+	 * @throws TextParseException
+	 * @throws IOException
+	 * */
+
+	public void writeLine(String name, int errCode, String errString,
+			ArrayList<String> addrList) throws UnknownHostException,
+			TextParseException, IOException {
+		allWriter.write(name);
+		allWriter.write(String.valueOf(errCode));
+		allWriter.write(errString);
+
+		if (addrList != null) {
+			for (String tmpName : addrList) {
+				System.out.print(tmpName + ",");
+				allWriter.write(tmpName);
+			}
+			System.out.println();
+		} else {
+			// 解析失败, 写入到错误结果的文件中
+			errWriter.write(name);
+			errWriter.write(String.valueOf(errCode));
+			errWriter.write(errString);
+			errWriter.endRecord();
+			System.out.println(errString);
+		}
+		allWriter.endRecord();
+	}
+
+	/** 关闭所有读写对象, 完成数据写入 */
+	public void closeAllFile() {
+		allReader.close();
+		allWriter.close();
+		errWriter.close();
+	}
+}
+
+/** 用于处理dns请求 */
+class DnsRequest extends Thread {
+	public static boolean isErr = false;
+
+	private String DnsServer = null;
+	private String name = null;
+	private int udpErrCode = Lookup.TRY_AGAIN;
+	private int tcpErrCode = Lookup.TRY_AGAIN;
+	private String udpErrString = null;
+	private String tcpErrString = null;
+	private ArrayList<String> udpAddressList = null;
+	private ArrayList<String> tcpAddressList = null;
+	private SimpleResolver resolver = null;
+
+	private Table analyseTable = null;
+	public String[] analyseResultStringArray = null;
+
+	private boolean isTcp = false;
+
+	/**
+	 * 用于初始化dns服务器的构造
+	 * 
+	 * @param DnsServerName
+	 *            DNS服务器地址
+	 * @throws UnknownHostException
+	 */
+	public DnsRequest(String DnsServerName) throws UnknownHostException {
+		this.setDnsServer(DnsServerName);
+	}
+
+	public void setTCP() {
+		isTcp = true;
+	}
+
+	public void setUDP() {
+		isTcp = false;
+	}
+
+	/**
+	 * 配置一个dnsServer
+	 * 
+	 * @throws UnknownHostException
+	 */
+	public void setDnsServer(String DnsServerName) throws UnknownHostException {
+		this.DnsServer = DnsServerName;
+	}
+
+	/**
+	 * 改变解析器的配置
+	 * 
+	 * @throws UnknownHostException
+	 */
+	private void setResolver() throws UnknownHostException {
+		resolver = new SimpleResolver(this.DnsServer);
+	}
+
+	/** 加入代理或者隧道的配置 */
+
+	public void setQueryName(String name) {
+		this.name = name;
+	}
+
+	public String getQueryName() {
+		return this.name;
+	}
+
+	/** 启动单个域名解析\分析线程 */
+	public void run() {
+		System.out.println("now query: " + getQueryName());
+		// 分别进行udp和tcp请求
+		try {
+			setUDP();
+			udpAddressList = doRequest();
+			setTCP();
+			tcpAddressList = doRequest();
+		} catch (UnknownHostException e) {
+			e.printStackTrace();
+			System.err.println("dns服务器非法");
+			isErr = true;
+		}
+
+		// 进行分析
+
+		switch (DnsAnalyse.analyse(this)) {
+		case DnsAnalyse.NORMAL:
+			analyseTable = null;
+			break;
+		case DnsAnalyse.NOTFOUND:
+			analyseTable = Global.blockTable;
+			Global.blockRecords.add(this);
+			analyseResultStringArray = new String[] { "", getQueryName(),
+					getTcpErrString() };
+			break;
+		case DnsAnalyse.TIMEOUT:
+			analyseTable = Global.timeoutTable;
+			Global.timeoutRecords.add(this);
+			analyseResultStringArray = new String[] { "", getQueryName(),
+					getTcpErrString() };
+			break;
+		case DnsAnalyse.POLLUTE:
+			analyseTable = Global.polluteTable;
+			Global.polluteRecords.add(this);
+			analyseResultStringArray = new String[] { "", getQueryName(),
+					getUdpAddrList().toString(), getTcpAddrList().toString() };
+			break;
+		case DnsAnalyse.OTHER_DIFF:
+		case DnsAnalyse.OTHER_SAME:
+			analyseTable = Global.otherTable;
+			Global.otherRecords.add(this);
+			analyseResultStringArray = new String[] { "", getQueryName(),
+					getUdpErrString(), getTcpErrString() };
+			break;
+		default:
+			System.err.println("analyse wrong");
+			System.err.println(String.valueOf(getUdpErrCode()) + ":"
+					+ getUdpErrString());
+			System.err.println(String.valueOf(getTcpErrCode()) + ":"
+					+ getTcpErrString());
+			break;
+		}
+		DnsAnalyse.analyse(this);
+
+		// 对结果进行分析
+
+		// 在子线程上对ui的操作必须用这个进行同步
+		Display.getDefault().asyncExec(new Runnable() {
+			@Override
+			public void run() {
+				TableItem tmpItem = new TableItem(Global.rawNameTable, SWT.None);
+				// 写编号
+				tmpItem.setText(0,
+						Integer.toString(Global.rawNameTable.getItemCount()));
+				// 填写域名
+				tmpItem.setText(1, getQueryName());
+				// 填写udp结果
+				if (Lookup.SUCCESSFUL == getUdpErrCode()) {
+					tmpItem.setText(2, getUdpAddrList().toString());
+				} else {
+					tmpItem.setText(2, getUdpErrString());
+				}
+				// 填写tcp结果
+				if (Lookup.SUCCESSFUL == getTcpErrCode()) {
+					tmpItem.setText(3, getTcpAddrList().toString());
+				} else {
+					tmpItem.setText(3, getTcpErrString());
+				}
+				
+				// 使能输出按钮
+//				if (Global.rawNameTable.getItemCount() == Global.dnsRecords
+//						.size()) {
+//					Global.exportButton.setEnabled(true);
+//				}
+
+				// 写分析结果
+				if (null != analyseTable) {
+					TableItem analyseItem = new TableItem(analyseTable,
+							SWT.None);
+					analyseItem.setText(analyseResultStringArray);
+					analyseItem.setText(0,
+							String.valueOf(analyseTable.getItemCount()));
+				}
+			}
+		});
+	}
+
+	/**
+	 * 发起一个dns请求, 并获取结果. 短时间同一个请求会使用缓存数据, 必须禁用缓存或者清除缓存
+	 * 
+	 * @throws UnknownHostException
+	 */
+	public ArrayList<String> doRequest() throws UnknownHostException {
+		Lookup lookup;
+		ArrayList<String> addressList = null;
+		int errCode = Lookup.TRY_AGAIN;
+		String errString = null;
+
+		/**
+		 * @throw UnknownHostException
+		 */
+		setResolver();
+		// 改变传输协议
+		resolver.setTCP(isTcp);
+
+		if (this.name == null) {
+			errCode = -1;
+			errString = "name is not set";
+		} else {
+			try {
+				lookup = new Lookup(getQueryName(), Type.A);
+				lookup.setResolver(resolver);
+				// 清空缓存
+				lookup.setCache(new Cache());
+				for (int j = 0; ((errCode == Lookup.TRY_AGAIN) && (j < 3)); ++j) {
+					if (j > 0){
+						System.err.println("***************************");
+						System.err.println(errString);
+						System.err.println("第"+String.valueOf(j+1)+"次请求");
+						System.err.println("***************************");
+					}
+
+					Record[] records = lookup.run();
+
+					errCode = lookup.getResult();
+					errString = lookup.getErrorString();
+					if (errCode == Lookup.SUCCESSFUL) {
+						addressList = new ArrayList<String>();
+						String address = null;
+						for (int i = 0; i < records.length; i++) {
+							if (records[i] instanceof ARecord) {
+								address = ((ARecord) records[i]).getAddress()
+										.getHostAddress();
+								addressList.add(address);
+							}
+						}
+					}
+				}
+			} catch (TextParseException e) {
+				e.printStackTrace();
+				errCode = -1;
+				errString = "query name is invalid";
+			}
+		}
+
+		if (isTcp) {
+			tcpErrCode = errCode;
+			tcpErrString = errString;
+		} else {
+			udpErrCode = errCode;
+			udpErrString = errString;
+		}
+		return addressList;
+	}
+
+	/** 获取UDP错误码(int型需要转string) */
+	public int getUdpErrCode() {
+		return this.udpErrCode;
+	}
+
+	/** 获取UDP错误信息 */
+	public String getUdpErrString() {
+		return this.udpErrString;
+	}
+
+	/** 获取TCP错误码(int型需要转string) */
+	public int getTcpErrCode() {
+		return this.tcpErrCode;
+	}
+
+	/** 获取TCP错误信息 */
+	public String getTcpErrString() {
+		return this.tcpErrString;
+	}
+
+	/**
+	 * /** 获取udp解析结果
+	 */
+	public ArrayList<String> getUdpAddrList() {
+		return udpAddressList;
+	}
+
+	/** 获取tcp解析结果 */
+	public ArrayList<String> getTcpAddrList() {
+		return tcpAddressList;
+	}
+}

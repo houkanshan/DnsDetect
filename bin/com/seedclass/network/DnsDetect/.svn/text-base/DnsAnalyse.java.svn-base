@@ -1,0 +1,175 @@
+package com.seedclass.network.DnsDetect;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.Collections;
+
+import javax.swing.plaf.basic.BasicInternalFrameTitlePane.RestoreAction;
+
+import org.omg.PortableInterceptor.SUCCESSFUL;
+import org.xbill.DNS.Lookup;
+
+import com.csvreader.CsvReader;
+import com.csvreader.CsvWriter;
+
+public class DnsAnalyse {
+	public final static int NORMAL = 0;
+	public final static int TIMEOUT = 1;
+	public final static int NOTFOUND = 2;
+	public final static int POLLUTE = 3;
+	public final static int OTHER_SAME = 4;
+	public final static int OTHER_DIFF = 5;
+
+
+//	public static void main(String[] args) {
+//		CsvReader allTcpReader = null;
+//		CsvReader allUdpReader = null;
+//		// CsvReader errReader = null;
+//		CsvWriter analyseWriter = null;
+//		CsvWriter specialWriter = null;
+//		String allTcpFileName = "DnsAllResult_tcp.csv";
+//		String allUdpFileName = "DnsAllResult_udp.csv";
+//		// String errFileName = "DnsErrResult.csv";
+//		// String analyseFileName = ".\\output\\analyse.csv";
+//		// String specialFileName = ".\\output\\special.csv";
+//		String analyseFileName = "analyse.csv";
+//		String specialFileName = "special.csv";
+//
+//		try {
+//			allTcpReader = new CsvReader(allTcpFileName);
+//			allUdpReader = new CsvReader(allUdpFileName);
+//			// errReader = new CsvReader(errFileName);
+//
+//			new File(analyseFileName);
+//			new File(specialFileName);
+//
+//			analyseWriter = new CsvWriter(analyseFileName, ',',
+//					Charset.forName("utf-8"));
+//			specialWriter = new CsvWriter(specialFileName, ',',
+//					Charset.forName("utf-8"));
+//			// analyseWriter = new CsvWriter(new PrintWriter(
+//			// new OutputStreamWriter(
+//			// new FileOutputStream(analyseFileName))), ',');
+//			// specialWriter = new CsvWriter(new PrintWriter(
+//			// new OutputStreamWriter(
+//			// new FileOutputStream(specialFileName))), ',');
+//
+//			while ((allTcpReader.readRecord() && allUdpReader.readRecord())) {
+//				String curTcpName = allTcpReader.get(0);
+//				String curTcpErrCode = allTcpReader.get(1);
+//				String curTcpErrString = allTcpReader.get(2);
+//				String curUdpName = allUdpReader.get(0);
+//				String curUdpErrCode = allUdpReader.get(1);
+//				String curUdpErrString = allUdpReader.get(2);
+//
+//				ArrayList<String> tcpAddrList = null;
+//				ArrayList<String> udpAddrList = null;
+//
+//				// 完全相同无内容
+//				// 地址不同写地址不同, 被污染
+//				// 错误码不同分析错误码类型
+//				// 所有输出到最后统一写入
+//
+//				if (curTcpName.equalsIgnoreCase(curUdpName)) {
+//					System.err.println(curTcpName);
+//					if (curTcpErrCode.equals(curUdpErrCode)) {
+//						if (curTcpErrCode.equals(String
+//								.valueOf(Lookup.SUCCESSFUL))) {
+//							// 相同且均为成功
+//							tcpAddrList = new ArrayList<String>();
+//							udpAddrList = new ArrayList<String>();
+//							for (int i = 3; i != allTcpReader.getColumnCount(); i++) {
+//								tcpAddrList.add(allTcpReader.get(i));
+//								udpAddrList.add(allUdpReader.get(i));
+//							}
+//							Collections.sort(tcpAddrList);
+//							Collections.sort(udpAddrList);
+//							if (tcpAddrList.equals(udpAddrList)) {
+//								// 解析没问题
+//							} else {
+//								// 有问题, 判断为污染
+//								analyseWriter.write(curUdpName);
+//								analyseWriter.write("dns地址解析结果不同,判断为被污染");
+//								analyseWriter.endRecord();
+//							}
+//						} else {
+//							// 相同但为解析失败, 输出错误信息
+//							analyseWriter.write(curUdpName);
+//							analyseWriter.write(curUdpErrString);
+//							analyseWriter.endRecord();
+//						}
+//					} else {
+//						// 错误码不同, 输出不同的错误码, 放到special里继续分析
+//						// 可能为dns阻断, 需要加代理结果与不代理结果分析
+//						analyseWriter.write(curUdpName);
+//						analyseWriter.write(curUdpErrString);
+//						analyseWriter.write(curTcpErrString);
+//						analyseWriter.endRecord();
+//						// TODO 加到special里分析
+//					}
+//				} else {
+//					// 输出文件域名匹配
+//					System.err.println("域名不对齐");
+//					return;
+//				}
+//				// 换行
+//			}
+//		} catch (FileNotFoundException e) {
+//			e.printStackTrace();
+//			System.err.println("待分析文件不存在");
+//			return;
+//		} catch (IOException e) {
+//			e.printStackTrace();
+//			System.err.println("读取文件错误");
+//			return;
+//
+//		}// while
+//
+//		analyseWriter.close();
+//		specialWriter.close();
+//		System.err.println("finish");
+//	}
+	
+	static int analyse(DnsRequest dnsRequest){
+		int res = -1;
+		if (dnsRequest.getUdpErrCode() == dnsRequest.getTcpErrCode()){
+			if (dnsRequest.getUdpErrCode() == Lookup.SUCCESSFUL){
+				//相同且成功
+				Collections.sort(dnsRequest.getTcpAddrList());
+				Collections.sort(dnsRequest.getUdpAddrList());
+				if (dnsRequest.getTcpAddrList().equals(dnsRequest.getUdpAddrList())){
+					//没有问题
+					res = NORMAL;
+					System.err.println("正常");
+				} else {
+					res = POLLUTE;
+					System.err.println("污染");
+				}
+			} else {
+				//都解析失败, 但错误码相同
+				switch (dnsRequest.getUdpErrCode()) {
+				case Lookup.TRY_AGAIN:
+					res = TIMEOUT;
+					System.err.println("超时");
+					break;
+				case Lookup.TYPE_NOT_FOUND:
+					res = NOTFOUND;
+					System.err.println("没找到");
+					break;
+				default:
+					res = OTHER_SAME;
+					System.err.println("其他相同");
+					break;
+				}
+			}
+		} else {
+			//错误码不同
+			res = OTHER_DIFF;
+			System.err.println("其他不同");
+		}
+		return res;
+	}
+}
